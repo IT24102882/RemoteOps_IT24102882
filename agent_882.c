@@ -1,3 +1,5 @@
+#include <arpa/inet.h>
+#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -355,7 +357,55 @@ else if (strncmp(buffer, "GET ", 4) == 0)
         }
     }
 }
+else if (strncmp(buffer, "MONITOR START ", 14) == 0)
+{
+    int udp_port;
 
+    if (sscanf(buffer, "MONITOR START %d", &udp_port) == 1)
+    {
+        printf("MONITOR START command received. UDP port: %d\n",
+               udp_port);
+
+        int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
+
+        if (udp_fd >= 0)
+        {
+            struct sockaddr_in udp_addr;
+            memset(&udp_addr, 0, sizeof(udp_addr));
+
+            udp_addr.sin_family = AF_INET;
+            udp_addr.sin_port = htons(udp_port);
+            udp_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
+            char monitor_data[256];
+
+            snprintf(monitor_data, sizeof(monitor_data),
+                     "CPU_MONITOR ACTIVE SID:2882");
+
+            sendto(udp_fd, monitor_data, strlen(monitor_data), 0,
+                   (struct sockaddr *)&udp_addr,
+                   sizeof(udp_addr));
+
+            close(udp_fd);
+
+            char response[] =
+                "OK MONITOR_STARTED SID:2882\n";
+
+            send(client_fd, response,
+                 strlen(response), 0);
+        }
+    }
+}
+else if (strcmp(buffer, "MONITOR STOP\n") == 0)
+{
+    printf("MONITOR STOP command received.\n");
+
+    char response[] =
+        "OK MONITOR_STOPPED SID:2882\n";
+
+    send(client_fd, response,
+         strlen(response), 0);
+}
 
     else
     {
