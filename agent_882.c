@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
+#include <pthread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -12,7 +12,7 @@
 #define PORT 9410
 #define AUTH_TOKEN "OPS-2882"
 #define SID "2882"
-
+void *handle_client(void *arg);
 int main(void)
 {
     int server_fd;
@@ -56,7 +56,7 @@ int main(void)
 }
 
      printf("Socket bound to port %d successfully.\n", PORT);
-     if (listen(server_fd, 5) < 0)
+if (listen(server_fd, 10) < 0)
 {
         perror("listen failed");
         close(server_fd);
@@ -64,16 +64,62 @@ int main(void)
 }
 
     printf("Agent is listening on TCP port %d...\n", PORT);
-    client_fd = accept(server_fd, NULL, NULL);
-
-    if (client_fd < 0)
+while (1)
 {
-       perror("accept failed");
-       close(server_fd);
-       return 1;
+    int *client_ptr = malloc(sizeof(int));
+
+    if (client_ptr == NULL)
+    {
+        perror("malloc failed");
+        continue;
+    }
+
+    *client_ptr = accept(server_fd, NULL, NULL);
+
+    if (*client_ptr < 0)
+    {
+        perror("accept failed");
+        free(client_ptr);
+        continue;
+    }
+
+    printf("Controller connected successfully.\n");
+
+    pthread_t thread_id;
+
+    if (pthread_create(&thread_id, NULL, handle_client, client_ptr) != 0)
+    {
+        perror("pthread_create failed");
+        close(*client_ptr);
+        free(client_ptr);
+        continue;
+    }
+
+    pthread_detach(thread_id);
 }
 
-   printf("Controller connected successfully.\n");
+    close(server_fd); 
+    return 0;
+}
+
+void *handle_client(void *arg)
+{
+    int client_fd = *(int *)arg;
+    free(arg);
+int authenticated = 0;
+char buffer[1024];
+ssize_t bytes_received;
+
+FILE *uptime_file;
+double uptime_sec;
+
+FILE *mem_file;
+long mem_total;
+long mem_available;
+
+FILE *load_file;
+double cpu_load;
+    printf("Controller thread started.\n");
 
 while (1)
 {
@@ -414,10 +460,6 @@ else if (strcmp(buffer, "MONITOR STOP\n") == 0)
     }
 }
 }
-
     close(client_fd);
-
-    close(server_fd); 
-    return 0;
+    return NULL;
 }
-
