@@ -12,6 +12,33 @@
 #define PORT 9410
 #define AUTH_TOKEN "OPS-2882"
 #define SID "2882"
+#define LOG_FILE "remoteops_IT24102882.log"
+
+pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+void write_log(const char *message)
+{
+    pthread_mutex_lock(&log_mutex);
+
+    FILE *log_file = fopen(LOG_FILE, "a");
+
+    if (log_file != NULL)
+    {
+        time_t now = time(NULL);
+        struct tm *time_info = localtime(&now);
+
+        char time_buffer[64];
+        strftime(time_buffer, sizeof(time_buffer),
+                 "%Y-%m-%d %H:%M:%S", time_info);
+
+        fprintf(log_file, "[%s] %s\n", time_buffer, message);
+        fclose(log_file);
+    }
+
+    pthread_mutex_unlock(&log_mutex);
+}
+
+
 void *handle_client(void *arg);
 int main(void)
 {
@@ -157,7 +184,7 @@ if (strcmp(buffer, "AUTH OPS-2882\n") == 0)
 {
     authenticated = 1;
     printf("Authentication successful.\n");
-
+write_log("AUTH SUCCESS SID:2882");
     char response[] = "OK AUTHENTICATED SID:2882\n";
     send(client_fd, response, strlen(response), 0);
 }
@@ -175,6 +202,7 @@ else
     if (strcmp(buffer, "SYSINFO\n") == 0)
     {
         printf("SYSINFO command received.\n");
+write_log("COMMAND SYSINFO SID:2882");
         uptime_file = fopen("/proc/uptime", "r");
 
 if (uptime_file != NULL)
@@ -217,7 +245,7 @@ send(client_fd, response, strlen(response), 0);
 else if (strcmp(buffer, "LISTPROC\n") == 0)
 {
     printf("LISTPROC command received.\n");
-
+write_log("COMMAND LISTPROC SID:2882");
     FILE *proc_file;
     char proc_buffer[2048] = "";
     char line[128];
@@ -246,7 +274,7 @@ else if (strcmp(buffer, "LISTPROC\n") == 0)
 else if (strncmp(buffer, "EXEC ", 5) == 0)
 {
     printf("EXEC command received.\n");
-
+write_log("COMMAND EXEC SID:2882");
     char command[50];
     char system_command[100] = "";
     char exec_output[1024] = "";
@@ -372,8 +400,7 @@ else if (strncmp(buffer, "GET ", 4) == 0)
 
             send(client_fd, response,
                  strlen(response), 0);
-        }
-        else
+        }        else
         {
             fseek(file, 0, SEEK_END);
             long filesize = ftell(file);
@@ -411,7 +438,7 @@ else if (strncmp(buffer, "MONITOR START ", 14) == 0)
     {
         printf("MONITOR START command received. UDP port: %d\n",
                udp_port);
-
+write_log("COMMAND MONITOR START SID:2882");
         int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
 
         if (udp_fd >= 0)
@@ -445,7 +472,7 @@ else if (strncmp(buffer, "MONITOR START ", 14) == 0)
 else if (strcmp(buffer, "MONITOR STOP\n") == 0)
 {
     printf("MONITOR STOP command received.\n");
-
+write_log("COMMAND MONITOR STOP SID:2882");
     char response[] =
         "OK MONITOR_STOPPED SID:2882\n";
 
@@ -458,6 +485,7 @@ else if (strncmp(buffer, "QUIT", 4) == 0)
     send(client_fd, response, strlen(response), 0);
 
     printf("Controller requested graceful disconnect.\n");
+write_log("COMMAND QUIT - GRACEFUL DISCONNECT SID:2882");
     break;
 }
     else
