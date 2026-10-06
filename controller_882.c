@@ -97,9 +97,77 @@ if (strncmp(command, "PUT ", 4) == 0)
                               sizeof(response) - 1, 0);
 
         if (bytes_received > 0)
-        {
+    
+   {
             response[bytes_received] = '\0';
             printf("Agent response: %s", response);
+        }
+
+        continue;
+    }
+}
+
+
+
+if (strncmp(command, "GET ", 4) == 0)
+{
+    char filename[100];
+
+    if (sscanf(command, "GET %99s", filename) == 1)
+    {
+        send(sock_fd, command, strlen(command), 0);
+
+        bytes_received = recv(sock_fd, response,
+                              sizeof(response) - 1, 0);
+
+        if (bytes_received > 0)
+        {
+            response[bytes_received] = '\0';
+
+            char received_filename[100];
+            long filesize;
+
+            if (sscanf(response,
+                       "OK FILE_SEND %99s %ld SID:2882",
+                       received_filename, &filesize) == 2)
+            {
+                printf("Agent response: OK FILE_SEND %s %ld SID:2882\n",
+                       received_filename, filesize);
+
+                FILE *file = fopen("downloaded_test.txt", "wb");
+
+                if (file != NULL)
+                {
+                    long received = 0;
+                    char file_buffer[1024];
+
+                    while (received < filesize)
+                    {
+                        long remaining = filesize - received;
+                        size_t to_receive =
+                            remaining < (long)sizeof(file_buffer)
+                            ? (size_t)remaining
+                            : sizeof(file_buffer);
+
+                        ssize_t n = recv(sock_fd, file_buffer,
+                                         to_receive, 0);
+
+                        if (n <= 0)
+                            break;
+
+                        fwrite(file_buffer, 1, n, file);
+                        received += n;
+                    }
+
+                    fclose(file);
+
+                    printf("File downloaded successfully: downloaded_test.txt\n");
+                }
+            }
+            else
+            {
+                printf("Agent response: %s", response);
+            }
         }
 
         continue;

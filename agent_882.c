@@ -303,6 +303,60 @@ else if (strncmp(buffer, "PUT ", 4) == 0)
 }
 
 
+else if (strncmp(buffer, "GET ", 4) == 0)
+{
+    char filename[100];
+
+    if (sscanf(buffer, "GET %99s", filename) == 1)
+    {
+        printf("GET command received: %s\n", filename);
+
+        char filepath[256];
+        snprintf(filepath, sizeof(filepath),
+                 "./agentfiles/IT24102882/%s", filename);
+
+        FILE *file = fopen(filepath, "rb");
+
+        if (file == NULL)
+        {
+            char response[] =
+                "ERR 005 FILE_NOT_FOUND SID:2882\n";
+
+            send(client_fd, response,
+                 strlen(response), 0);
+        }
+        else
+        {
+            fseek(file, 0, SEEK_END);
+            long filesize = ftell(file);
+            rewind(file);
+
+            char response[256];
+            snprintf(response, sizeof(response),
+                     "OK FILE_SEND %s %ld SID:2882\n",
+                     filename, filesize);
+
+            send(client_fd, response,
+                 strlen(response), 0);
+
+            char file_buffer[1024];
+            size_t bytes_read;
+
+            while ((bytes_read = fread(file_buffer, 1,
+                                       sizeof(file_buffer), file)) > 0)
+            {
+                send(client_fd, file_buffer, bytes_read, 0);
+            }
+
+            fclose(file);
+
+            printf("File sent successfully: %s (%ld bytes)\n",
+                   filepath, filesize);
+        }
+    }
+}
+
+
     else
     {
         char response[] = "ERR 003 UNKNOWN_COMMAND SID:2882\n";
