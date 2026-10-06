@@ -148,7 +148,37 @@ snprintf(response, sizeof(response),
          "OK SYSINFO %.2f %ld %.0f SID:2882\n",
          cpu_load, (mem_total - mem_available) / 1024, uptime_sec);
 
-send(client_fd, response, strlen(response), 0);    }
+send(client_fd, response, strlen(response), 0);    
+}
+else if (strcmp(buffer, "LISTPROC\n") == 0)
+{
+    printf("LISTPROC command received.\n");
+
+    FILE *proc_file;
+    char proc_buffer[2048] = "";
+    char line[128];
+
+    proc_file = popen("ps -eo pid=,comm=", "r");
+
+    if (proc_file != NULL)
+    {
+        while (fgets(line, sizeof(line), proc_file) != NULL)
+        {
+            if (strlen(proc_buffer) + strlen(line) < sizeof(proc_buffer) - 20)
+            {
+                strcat(proc_buffer, line);
+            }
+        }
+
+        pclose(proc_file);
+
+        char response[2300];
+        snprintf(response, sizeof(response),
+                 "OK PROCS %s SID:2882\n", proc_buffer);
+
+        send(client_fd, response, strlen(response), 0);
+    }
+}
     else
     {
         char response[] = "ERR 003 UNKNOWN_COMMAND SID:2882\n";
