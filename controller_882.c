@@ -181,6 +181,15 @@ if (bytes_received > 0)
 {
     response[bytes_received] = '\0';
     printf("Agent response: %s", response);
+
+ if (strncmp(command, "QUIT", 4) == 0)
+    {
+        printf("Controller disconnected gracefully.\n");
+        break;
+    }
+
+
+
 }
 else
 {

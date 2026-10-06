@@ -452,7 +452,14 @@ else if (strcmp(buffer, "MONITOR STOP\n") == 0)
     send(client_fd, response,
          strlen(response), 0);
 }
+else if (strncmp(buffer, "QUIT", 4) == 0)
+{
+    char response[] = "OK BYE SID:2882\n";
+    send(client_fd, response, strlen(response), 0);
 
+    printf("Controller requested graceful disconnect.\n");
+    break;
+}
     else
     {
         char response[] = "ERR 003 UNKNOWN_COMMAND SID:2882\n";
