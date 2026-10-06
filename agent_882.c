@@ -38,7 +38,13 @@ void write_log(const char *message)
     pthread_mutex_unlock(&log_mutex);
 }
 
+typedef struct
+{
+    int udp_port;
+    volatile int running;
+} MonitorData;
 
+void *monitor_thread(void *arg);
 void *handle_client(void *arg);
 int main(void)
 {
@@ -128,7 +134,45 @@ while (1)
     close(server_fd); 
     return 0;
 }
+void *monitor_thread(void *arg)
+{
+    MonitorData *data = (MonitorData *)arg;
 
+    int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
+
+    if (udp_fd < 0)
+    {
+        perror("UDP socket failed");
+        return NULL;
+    }
+
+    struct sockaddr_in udp_addr;
+    memset(&udp_addr, 0, sizeof(udp_addr));
+
+    udp_addr.sin_family = AF_INET;
+    udp_addr.sin_port = htons(data->udp_port);
+    udp_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
+    while (data->running)
+    {
+        char monitor_data[256];
+
+        snprintf(monitor_data, sizeof(monitor_data),
+                 "CPU_MONITOR ACTIVE SID:2882");
+
+        sendto(udp_fd,
+               monitor_data,
+               strlen(monitor_data),
+               0,
+               (struct sockaddr *)&udp_addr,
+               sizeof(udp_addr));
+
+        sleep(2);
+    }
+
+    close(udp_fd);
+    return NULL;
+}
 void *handle_client(void *arg)
 {
     int client_fd = *(int *)arg;
@@ -146,6 +190,10 @@ long mem_available;
 
 FILE *load_file;
 double cpu_load;
+MonitorData monitor;
+monitor.running = 0;
+monitor.udp_port = 0;
+
     printf("Controller thread started.\n");
 
 while (1)
@@ -438,28 +486,18 @@ else if (strncmp(buffer, "MONITOR START ", 14) == 0)
     {
         printf("MONITOR START command received. UDP port: %d\n",
                udp_port);
-write_log("COMMAND MONITOR START SID:2882");
-        int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
 
-        if (udp_fd >= 0)
+        write_log("COMMAND MONITOR START SID:2882");
+
+        monitor.udp_port = udp_port;
+        monitor.running = 1;
+
+        pthread_t monitor_tid;
+
+        if (pthread_create(&monitor_tid, NULL,
+                           monitor_thread, &monitor) == 0)
         {
-            struct sockaddr_in udp_addr;
-            memset(&udp_addr, 0, sizeof(udp_addr));
-
-            udp_addr.sin_family = AF_INET;
-            udp_addr.sin_port = htons(udp_port);
-            udp_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-
-            char monitor_data[256];
-
-            snprintf(monitor_data, sizeof(monitor_data),
-                     "CPU_MONITOR ACTIVE SID:2882");
-
-            sendto(udp_fd, monitor_data, strlen(monitor_data), 0,
-                   (struct sockaddr *)&udp_addr,
-                   sizeof(udp_addr));
-
-            close(udp_fd);
+            pthread_detach(monitor_tid);
 
             char response[] =
                 "OK MONITOR_STARTED SID:2882\n";
@@ -467,18 +505,29 @@ write_log("COMMAND MONITOR START SID:2882");
             send(client_fd, response,
                  strlen(response), 0);
         }
+        else
+        {
+            monitor.running = 0;
+            perror("Monitor thread creation failed");
+        }
     }
 }
 else if (strcmp(buffer, "MONITOR STOP\n") == 0)
 {
     printf("MONITOR STOP command received.\n");
-write_log("COMMAND MONITOR STOP SID:2882");
+
+    write_log("COMMAND MONITOR STOP SID:2882");
+
+    monitor.running = 0;
+
     char response[] =
         "OK MONITOR_STOPPED SID:2882\n";
 
     send(client_fd, response,
          strlen(response), 0);
 }
+
+
 else if (strncmp(buffer, "QUIT", 4) == 0)
 {
     char response[] = "OK BYE SID:2882\n";
@@ -488,6 +537,7 @@ else if (strncmp(buffer, "QUIT", 4) == 0)
 write_log("COMMAND QUIT - GRACEFUL DISCONNECT SID:2882");
     break;
 }
+
     else
     {
         char response[] = "ERR 003 UNKNOWN_COMMAND SID:2882\n";
