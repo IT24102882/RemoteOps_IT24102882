@@ -75,8 +75,24 @@ int main(void)
 
 while (1)
 {
-bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+bytes_received = 0;
 
+while (bytes_received < (ssize_t)sizeof(buffer) - 1)
+{
+    char ch;
+    ssize_t n = recv(client_fd, &ch, 1, 0);
+
+    if (n <= 0)
+    {
+        bytes_received = n;
+        break;
+    }
+
+    buffer[bytes_received++] = ch;
+
+    if (ch == '\n')
+        break;
+}
 if (bytes_received <= 0) {
 
     printf("Controller disconnected.\n");
@@ -226,7 +242,65 @@ else if (strncmp(buffer, "EXEC ", 5) == 0)
         send(client_fd, response, strlen(response), 0);
     }
 }
+else if (strncmp(buffer, "PUT ", 4) == 0)
+{
+    char filename[100];
+    long filesize;
 
+    if (sscanf(buffer, "PUT %99s %ld", filename, &filesize) == 2)
+    {
+        printf("PUT command received: %s (%ld bytes)\n",
+               filename, filesize);
+
+        char filepath[256];
+        snprintf(filepath, sizeof(filepath),
+                 "./agentfiles/IT24102882/%s", filename);
+
+        FILE *file = fopen(filepath, "wb");
+
+        if (file != NULL)
+        {
+            long received = 0;
+            char file_buffer[1024];
+
+            while (received < filesize)
+            {
+                long remaining = filesize - received;
+                size_t to_receive =
+                    remaining < (long)sizeof(file_buffer)
+                    ? (size_t)remaining
+                    : sizeof(file_buffer);
+
+                ssize_t n = recv(client_fd,
+                                 file_buffer,
+                                 to_receive,
+                                 0);
+
+                if (n <= 0)
+                    break;
+
+                fwrite(file_buffer, 1, n, file);
+                received += n;
+            }
+
+            fclose(file);
+
+            if (received == filesize)
+            {
+                char response[256];
+                snprintf(response, sizeof(response),
+                         "OK FILE_RECEIVED %s %ld SID:2882\n",
+                         filename, filesize);
+
+                send(client_fd, response,
+                     strlen(response), 0);
+
+                printf("File received successfully: %s\n",
+                       filepath);
+            }
+        }
+    }
+}
 
 
     else

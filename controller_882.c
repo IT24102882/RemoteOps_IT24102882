@@ -35,7 +35,8 @@ int main(void)
 
    if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) <= 0)
 {
-      perror("invalid address");
+ 
+     perror("invalid address");
        close(sock_fd);
        return 1;
 }
@@ -58,7 +59,52 @@ if (fgets(command, sizeof(command), stdin) == NULL)
     printf("\nController input closed.\n");
     break;
 }
+if (strncmp(command, "PUT ", 4) == 0)
+{
+    char filename[100];
 
+    if (sscanf(command, "PUT %99s", filename) == 1)
+    {
+        FILE *file = fopen(filename, "rb");
+
+        if (file == NULL)
+        {
+            printf("File not found: %s\n", filename);
+            continue;
+        }
+
+        fseek(file, 0, SEEK_END);
+        long filesize = ftell(file);
+        rewind(file);
+
+        char put_command[256];
+        snprintf(put_command, sizeof(put_command),
+                 "PUT %s %ld\n", filename, filesize);
+        send(sock_fd, put_command, strlen(put_command), 0);
+
+        char file_buffer[1024];
+        size_t bytes_read;
+
+        while ((bytes_read = fread(file_buffer, 1,
+                                   sizeof(file_buffer), file)) > 0)
+        {
+            send(sock_fd, file_buffer, bytes_read, 0);
+        }
+
+        fclose(file);
+
+        bytes_received = recv(sock_fd, response,
+                              sizeof(response) - 1, 0);
+
+        if (bytes_received > 0)
+        {
+            response[bytes_received] = '\0';
+            printf("Agent response: %s", response);
+        }
+
+        continue;
+    }
+}
 send(sock_fd, command, strlen(command), 0);
 
 bytes_received = recv(sock_fd, response, sizeof(response) - 1, 0);
