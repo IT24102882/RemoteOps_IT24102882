@@ -179,6 +179,56 @@ else if (strcmp(buffer, "LISTPROC\n") == 0)
         send(client_fd, response, strlen(response), 0);
     }
 }
+else if (strncmp(buffer, "EXEC ", 5) == 0)
+{
+    printf("EXEC command received.\n");
+
+    char command[50];
+    char system_command[100] = "";
+    char exec_output[1024] = "";
+    char line[256];
+
+    sscanf(buffer + 5, "%49s", command);
+
+    if (strcmp(command, "DATE") == 0)
+        strcpy(system_command, "date");
+    else if (strcmp(command, "UPTIME") == 0)
+        strcpy(system_command, "uptime");
+    else if (strcmp(command, "DISKFREE") == 0)
+        strcpy(system_command, "df -h /");
+    else if (strcmp(command, "HOSTNAME") == 0)
+        strcpy(system_command, "hostname");
+    else if (strcmp(command, "WHOAMI") == 0)
+        strcpy(system_command, "whoami");
+    else
+    {
+        char response[] = "ERR 002 COMMAND_NOT_ALLOWED SID:2882\n";
+        send(client_fd, response, strlen(response), 0);
+        continue;
+    }
+
+    FILE *exec_file = popen(system_command, "r");
+
+    if (exec_file != NULL)
+    {
+        while (fgets(line, sizeof(line), exec_file) != NULL)
+        {
+            if (strlen(exec_output) + strlen(line) < sizeof(exec_output) - 1)
+                strcat(exec_output, line);
+        }
+
+        pclose(exec_file);
+
+        char response[1200];
+        snprintf(response, sizeof(response),
+                 "OK EXEC %s SID:2882\n", exec_output);
+
+        send(client_fd, response, strlen(response), 0);
+    }
+}
+
+
+
     else
     {
         char response[] = "ERR 003 UNKNOWN_COMMAND SID:2882\n";
