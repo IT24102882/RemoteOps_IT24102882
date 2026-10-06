@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <sys/types.h>
@@ -13,7 +14,10 @@ int main(void)
 {
     int sock_fd;
     struct sockaddr_in server_addr;
-
+    char command[1024];
+    char response[1024];
+    ssize_t bytes_received;
+    
     printf("RemoteOps Controller starting...\n");
     printf("Connecting to TCP port: %d\n", PORT);
 
@@ -45,6 +49,31 @@ if (connect(sock_fd, (struct sockaddr *)&server_addr,
 
 printf("Connected to RemoteOps Agent successfully.\n");
 
+while (1)
+{
+printf("RemoteOps> ");
+
+if (fgets(command, sizeof(command), stdin) == NULL)
+{
+    printf("\nController input closed.\n");
+    break;
+}
+
+send(sock_fd, command, strlen(command), 0);
+
+bytes_received = recv(sock_fd, response, sizeof(response) - 1, 0);
+
+if (bytes_received > 0)
+{
+    response[bytes_received] = '\0';
+    printf("Agent response: %s", response);
+}
+else
+{
+       printf("Agent disconnected.\n");
+    break;
+}
+}
     close(sock_fd);
     return 0;
 }

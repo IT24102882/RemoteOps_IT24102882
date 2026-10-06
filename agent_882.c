@@ -8,12 +8,26 @@
 #include <netinet/in.h>
 
 #define PORT 9410
+#define AUTH_TOKEN "OPS-2882"
+#define SID "2882"
 
 int main(void)
 {
     int server_fd;
     int client_fd;
+    int authenticated = 0;
     struct sockaddr_in server_addr;
+     char buffer[1024];
+     ssize_t bytes_received;
+    FILE *uptime_file;
+    double uptime_sec;
+    FILE *mem_file;
+    long mem_total;
+    long mem_available;
+    FILE *load_file;
+    double cpu_load;
+
+
 
     printf("RemoteOps Agent starting...\n");
     printf("TCP Port: %d\n", PORT);
@@ -59,11 +73,93 @@ int main(void)
 
    printf("Controller connected successfully.\n");
 
-    close(client_fd);
+while (1)
+{
+bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
 
-    close(server_fd);
-    return 0;
+if (bytes_received <= 0) {
+
+    printf("Controller disconnected.\n");
+    break;
 }
 
+buffer[bytes_received] = '\0';
 
+printf("Received: %s\n", buffer);
+if (authenticated == 0)
+{
+
+if (strcmp(buffer, "AUTH OPS-2882\n") == 0)
+{
+    authenticated = 1;
+    printf("Authentication successful.\n");
+
+    char response[] = "OK AUTHENTICATED SID:2882\n";
+    send(client_fd, response, strlen(response), 0);
+}
+else
+{
+    printf("Authentication failed.\n");
+
+    char response[] = "ERR 001 AUTH_FAILED SID:2882\n";
+    send(client_fd, response, strlen(response), 0);
+}
+}
+
+else
+{
+    if (strcmp(buffer, "SYSINFO\n") == 0)
+    {
+        printf("SYSINFO command received.\n");
+        uptime_file = fopen("/proc/uptime", "r");
+
+if (uptime_file != NULL)
+{
+    fscanf(uptime_file, "%lf", &uptime_sec);
+    fclose(uptime_file);
+
+    printf("System uptime: %.0f seconds\n", uptime_sec);
+}
+mem_file = fopen("/proc/meminfo", "r");
+
+if (mem_file != NULL)
+{
+    fscanf(mem_file, "MemTotal: %ld kB\n", &mem_total);
+    fscanf(mem_file, "MemFree: %*ld kB\n");
+    fscanf(mem_file, "MemAvailable: %ld kB\n", &mem_available);
+
+    fclose(mem_file);
+
+    printf("Memory used: %ld MB\n",
+           (mem_total - mem_available) / 1024);
+}
+load_file = fopen("/proc/loadavg", "r");
+
+if (load_file != NULL)
+{
+    fscanf(load_file, "%lf", &cpu_load);
+    fclose(load_file);
+
+    printf("CPU load: %.2f\n", cpu_load);
+}
+char response[200];
+
+snprintf(response, sizeof(response),
+         "OK SYSINFO %.2f %ld %.0f SID:2882\n",
+         cpu_load, (mem_total - mem_available) / 1024, uptime_sec);
+
+send(client_fd, response, strlen(response), 0);    }
+    else
+    {
+        char response[] = "ERR 003 UNKNOWN_COMMAND SID:2882\n";
+        send(client_fd, response, strlen(response), 0);
+    }
+}
+}
+
+    close(client_fd);
+
+    close(server_fd); 
+    return 0;
+}
 
